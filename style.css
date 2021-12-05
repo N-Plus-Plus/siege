@@ -1,0 +1,39 @@
+:root{
+    --background: #242426;
+    --hp: #D8334A;
+    --stam: #FFCE54;
+}
+
+body{
+    background-color: var(--background);
+    margin: 0;
+    font-family: 'Lexend Deca', sans-serif;
+    color: #fffC;
+    overflow: auto;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+*,*::before{
+    box-sizing: border-box;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+.flexy{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+canvas{
+    background: #333;
+    display: block;
+    margin: 0 auto;
+    border-radius: 50%;
+}
