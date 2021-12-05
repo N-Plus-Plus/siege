@@ -2,7 +2,7 @@ document.addEventListener(`DOMContentLoaded`, function () { onLoad(); } );
 
 const canvas = document.querySelector(`#canvas`);
 const ctx = canvas.getContext(`2d`);
-const canvasDiameter = document.body.clientHeight * 0.9; // Canvas width and height
+const canvasDiameter = Math.min( document.body.clientHeight, document.body.clientWidth ) * 0.9; // Canvas width and height
 const canvasRadius = canvasDiameter / 2;
 const frameRate = 10; // Frame Rate
 
