@@ -458,3 +458,46 @@ function romanize (num) {
         roman = (key[+digits.pop() + (i * 10)] || "") + roman;
     return Array(+digits.join("") + 1).join("M") + roman;
 }
+
+
+/*
+
+IDEAS
+All vanilla features are monochrome
+All upgrades add colour to the interface and canvas
+
+General
+Scale change using a "toScale" like "toMass"
+Add gravity so your mass increases the speed of jerks towards you per second per second
+Another laser (potentially multiple) that never target the same jerk except bosses
+Upgrade jerks with body count instead of mass ?
+Prestige mechanic, currency and upgrades
+Handle game loss (and hung state ?)
+Autobuyers which run every n seconds but blindly buy everything
+- secondary upgrade to deselect autobuy per upgrade
+
+Laser
+COLD: Beam slows enemy while being fired at
+LIGHTNING: Beam ricochets to nearby jerks
+ENERGY: Cause an AOE explosion on jerk death
+HEAT: Laser does more damage the closer the jerk gets
+
+
+Me
+Pulse damage when within certain range
+Satelites
+Moon/s ?
+Shields which absorb damage before it harms you
+
+Jerks
+Bosses
+- That shoot at you
+Tough grunts
+Antimatter jerks ?
+Suns ??
+Mass determined as a range rather than flat
+
+
+
+
+*/
