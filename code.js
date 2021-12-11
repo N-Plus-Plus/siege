@@ -12,13 +12,15 @@ const adjFrames = 100; // Mass change frames
 const ups = 30; // UI updates per second
 const massFloor = 100;
 const delayFrames = 25; // frames between each jerk appearing
+const maxJerks = 100;
 
 var me = {
     mass: 1000
     , toMass: 1000
     , damage: 5
     , mobility: 150
-    , range: canvasRadius / 2
+    , scale: 1
+    , toScale: 1
 }
 var shooter = {
     rad: 0
@@ -39,22 +41,20 @@ var run = {
 var upg = {
     mobility: { ranks: 0, cost: 2000, benefit: 1.1, scale: 1.125 }
     , damage: { ranks: 0, cost: 4000, benefit: 1.1, scale: 1.125 }
-    , range: { ranks: 0, cost: 8000, benefit: 1.1, scale: 1.125 }
+    , scale: { ranks: 0, cost: 8000, benefit: 1.1, scale: 1.125 }
     , spawnrate: { ranks: 0, cost: 2500, benefit: 1.1, scale: 1.125 }
     , velocity: { ranks: 0, cost: 5000, benefit: 1.1, scale: 1.125 }
     , density: { ranks: 0, cost: 7500, benefit: 1.1, scale: 1.125 }
     , enemymass: { ranks: 0, cost: 10000, benefit: 1.25, scale: 1.25 * 10 / 9 }
 
 }
-var scale = 1;
 var unit = canvasDiameter * 0.001;
 
 var jerks = [];
 
-var waveTimer = 5000;
+const waveTimer = 4500;
 var liveness = true;
 
-// window.onresize = onLoad;
 
 function onLoad(){
     canvasDiameter = Math.min( document.body.clientHeight, document.body.clientWidth ) * 0.9; // Canvas width and height
@@ -77,9 +77,13 @@ function clicked( target, button ){
 
 function doWaves(){
     setTimeout(() => {
-        if( liveness ){ startWave(); }
+        if( liveness ){ 
+            if( jerks.length < maxJerks ){
+                spawnJerk();
+            }
+        }
         doWaves();
-    }, waveTimer / getStat( `spawnrate` ) );        
+    }, 500 + waveTimer / getStat( `spawnrate` ) );
 }
 
 function doLoop(){
@@ -92,7 +96,6 @@ function doLoop(){
     if( run.ticks % ( ups / frameRate ) == 0 ){
         updateMass();
         updateClock();
-        updateMPS();
         updateAfford();
     }
     if( me.mass !== me.toMass ){ adjMass(); }
@@ -106,15 +109,20 @@ function updateClock(){
     document.querySelector(`#runTime`).innerHTML = timeFromTicks( run.ticks );
 }
 
-function updateMPS(){
-    document.querySelector(`#myMPS`).innerHTML = calcMPS();
-}
-
 function updateAfford(){
     let n = document.querySelectorAll(`.button`);
     for( let i = 0; i < n.length; i++ ){
-        if( checkAfford( n[i].getAttribute(`id`) ) ){ n[i].classList.add( `afford`); }
-        else{ n[i].classList.remove( `afford`); }        
+        a = n[i].getAttribute(`id`);
+        if( checkAfford( a ) ){ 
+            n[i].classList.add( `afford`);
+            n[i].children[0].innerHTML = `${romanize( upg[a].ranks + 1)}`;
+            n[i].children[1].style = `;`;
+        }
+        else{
+            n[i].classList.remove( `afford`);
+            n[i].children[0].innerHTML = `${romanize( upg[a].ranks + 1)}`;
+            n[i].children[1].style = `width: ${( me.toMass - massFloor ) / getCost( a ) * 100}%`;
+        }
     }
 }
 
@@ -123,39 +131,44 @@ function cleanup(){
 }
 
 function drawMe(){
+    ctx.setLineDash([]);
     // laser
     if( shooter.firing ){
         ctx.beginPath();
         ctx.moveTo( canvasRadius, canvasRadius );
         ctx.lineTo( shooter.target.x, shooter.target.y );
         ctx.strokeStyle = "#f00"
-        ctx.lineWidth = 2;
+        ctx.lineWidth = Math.max( 2 / getStat( `scale` ), 0.5 );
         ctx.stroke();
         ctx.closePath();
     }
 
-    // shooter
-    let c = aToR( me.mass ) + shooter.len;
-    let a = Math.sin( shooter.rad ) * c;
-    let b = Math.cos( shooter.rad ) * c;
-    ctx.beginPath();
-    ctx.moveTo( canvasRadius, canvasRadius );
-    ctx.lineTo( canvasRadius + b, canvasRadius + a );
-    ctx.strokeStyle = "#fff"
-    ctx.lineWidth = 5;
-    ctx.stroke();
-    ctx.closePath();
+    if( getStat(`scale`) < 8 ){
+        // shooter
+        let c = ( aToR( me.mass ) + shooter.len ) / getStat( `scale` ) * unit;
+        let a = Math.sin( shooter.rad ) * c;
+        let b = Math.cos( shooter.rad ) * c;
+        ctx.beginPath();
+        ctx.moveTo( canvasRadius, canvasRadius );
+        ctx.lineTo( canvasRadius + b, canvasRadius + a );
+        ctx.strokeStyle = "#fff"
+        ctx.lineWidth = 5 / getStat( `scale` ) * unit;
+        ctx.stroke();
+        ctx.closePath();
+    }
 
     // me
     ctx.beginPath();
-    ctx.arc( canvasRadius, canvasRadius, aToR( me.mass ), 0, Math.PI * 2 );
+    ctx.arc( canvasRadius, canvasRadius, aToR( me.mass ) / getStat( `scale` ) * unit, 0, Math.PI * 2 );
     ctx.fillStyle = `#fff`;
     ctx.fill();
     ctx.closePath();
 
     // range
+    let k = 11;
     ctx.beginPath();
-    ctx.arc( canvasRadius, canvasRadius, getStat( `range` ), 0, Math.PI * 2 );
+    ctx.setLineDash([k, k]);
+    ctx.arc( canvasRadius, canvasRadius, canvasRadius / 2, 0, Math.PI * 2 );
     ctx.lineWidth = 1;
     ctx.strokeStyle = `#fff3`;
     ctx.stroke();
@@ -167,8 +180,8 @@ function moveJerks(){
     for( let i = 0; i < jerks.length; i++ ){
         let j = jerks[i];
         if( j.delay > 0 ){ j.delay--; }
-        else if( intersect( j.x, j.y, 0, canvasRadius, canvasRadius, aToR( me.mass ) ) ){
-            addMass( j.mass, i );
+        else if( intersect( j.x, j.y, 0, canvasRadius, canvasRadius, aToR( me.mass ) / getStat(`scale`) * unit ) ){
+            addMass( Math.pow( j.mass, j.density ), i );
         }
         else{
             j.x += j.xDir;
@@ -178,10 +191,11 @@ function moveJerks(){
 }
 
 function moveShooter(){
+    // TODO aim out of range but don't fire until in range
     let vis = [];
     for( let i = 0; i < jerks.length; i++ ){
         if( !jerks[i].visible ){
-            if( intersect( jerks[i].x, jerks[i].y, aToR( jerks[i].mass ), canvasRadius, canvasRadius, getStat(`range`) ) ){
+            if( intersect( jerks[i].x, jerks[i].y, aToR( jerks[i].mass ) / getStat(`scale`) * unit, canvasRadius, canvasRadius, canvasRadius / 2 ) ){
                 jerks[i].visible = true;
             }
         }
@@ -237,33 +251,10 @@ function drawJerks(){
     for( let i = 0; i < jerks.length; i++ ){
         let j = jerks[i];
         ctx.beginPath();
-        ctx.arc( j.x, j.y, aToR( j.mass ), 0, Math.PI * 2 );
+        ctx.arc( j.x, j.y, aToR( j.mass ) / getStat( `scale` ) * unit, 0, Math.PI * 2 );
         ctx.fillStyle = `#fff6`;
         ctx.fill();
         ctx.closePath();
-    }    
-}
-
-function startWave(){
-    let j = run.jerks + run.wave;
-    for( let i = 0; i < j; i++ ){
-        let m = getStat( `enemymass` );
-        let alpha = Math.random() * 90;
-        let c = canvasRadius + aToR( m );
-        let a = Math.sin( makeRadian( alpha ) ) * c * ( Math.random() > 0.5 ? 1 : -1 );
-        let b = Math.cos( makeRadian( alpha ) ) * c * ( Math.random() > 0.5 ? 1 : -1 );
-        jerks.push(
-            {
-                mass: m
-                , density: 1 * getStat( `density` )
-                , x: canvasRadius + a
-                , y: canvasRadius + b
-                , xDir: -a * 0.002 / getStat( `velocity` )
-                , yDir: -b * 0.002 / getStat( `velocity` )
-                , delay: i * delayFrames
-                , visible: false
-            }
-        )
     }
 }
 
@@ -279,8 +270,8 @@ function spawnJerk(){
             , density: 1 * getStat( `density` )
             , x: canvasRadius + a
             , y: canvasRadius + b
-            , xDir: -a * 0.002 / getStat( `velocity` )
-            , yDir: -b * 0.002 / getStat( `velocity` )
+            , xDir: -a * 0.002 * unit / getStat( `scale` )
+            , yDir: -b * 0.002 * unit / getStat( `scale` )
             , delay: 0
             , visible: false
         }
@@ -424,7 +415,19 @@ function buyUpg( subj ){
         me.toMass -= u.cost * Math.pow( u.scale, u.ranks );
         u.ranks++;
     }
-    updateMass();
+    if( subj == `scale` ){
+        doScaleThings();
+    }    
+}
+
+function doScaleThings(){
+    document.querySelector(`#myScale`).innerHTML = `Scale ${niceNumber(getStat(`scale`))}:1`;
+    // TODO move jerks back when increasing scale
+    for( let i = 0; i < jerks.length; i++ ){
+        let j = jerks[i];
+        j.x += j.xDir * 100;
+        j.y += j.yDir * 100;
+    }
 }
 
 function getCost( subj ){
@@ -440,4 +443,18 @@ function getStat( stat ){
         o = run[stat] * Math.pow( upg[stat].benefit, upg[stat].ranks );
     }
     return o;
+}
+
+function romanize (num) {
+    if( isNaN(num) )
+        return ``;
+    var digits = String(+num).split(""),
+        key = ["","C","CC","CCC","CD","D","DC","DCC","DCCC","CM",
+               "","X","XX","XXX","XL","L","LX","LXX","LXXX","XC",
+               "","I","II","III","IV","V","VI","VII","VIII","IX"],
+        roman = "",
+        i = 3;
+    while (i--)
+        roman = (key[+digits.pop() + (i * 10)] || "") + roman;
+    return Array(+digits.join("") + 1).join("M") + roman;
 }

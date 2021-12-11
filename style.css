@@ -73,9 +73,27 @@ section{
     justify-content: center;
     opacity: 0.25;
     cursor: default;
+    position: relative;
 }
 
 .button.afford{
     opacity: 1;
     cursor: pointer;
+}
+
+svg{
+    background-color: #ffff;
+    margin-bottom: 1rem;
+}
+
+.fill{
+    background-color: #fff3;
+    height: 100%;
+    position: absolute;
+    left: 0;
+}
+
+.tag{
+    margin-left: 0.5rem;
+    pointer-events: none;
 }
