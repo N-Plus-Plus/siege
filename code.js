@@ -37,6 +37,7 @@ var run = {
     , enemymass: 250
     , ticks: 0
     , massConsumed: 0
+    , kills: 0
 }
 var upg = {
     mobility: { ranks: 0, cost: 2000, benefit: 1.1, scale: 1.125 }
@@ -181,7 +182,7 @@ function moveJerks(){
         let j = jerks[i];
         if( j.delay > 0 ){ j.delay--; }
         else if( intersect( j.x, j.y, 0, canvasRadius, canvasRadius, aToR( me.mass ) / getStat(`scale`) * unit ) ){
-            addMass( Math.pow( j.mass, j.density ), i );
+            addMass( Math.pow( j.mass, Math.log2( j.density + 1 ) ), i );
         }
         else{
             j.x += j.xDir;
@@ -218,7 +219,7 @@ function moveShooter(){
         if( shooter.rad < 0 ){ shooter.rad += Math.PI * 2; }
         if( shooter.rad > Math.PI * 2 ){ shooter.rad -= Math.PI * 2; }
         if( deg !== shooter.rad ){
-            let amt = makeRadian( getStat( `mobility` ) ) / aToC( me.mass );
+            let amt = makeRadian( getStat( `mobility` ) ) / aToC( me.mass ) / getStat( `scale` ) * unit;
             if( shooter.rad < deg && shooter.rad + amt > deg ){
                 shooter.rad = deg;
             }
@@ -243,7 +244,10 @@ function fireLaser( index ){
     shooter.firing = true;
     shooter.target.x = tar.x;
     shooter.target.y = tar.y;
-    if( jerks[index].mass <= 0 ){ jerks.splice( index, 1 ); }
+    if( jerks[index].mass <= 0 ){
+        jerks.splice( index, 1 );
+        run.kills++;
+    }
     updateMass();
 }
 
@@ -422,7 +426,6 @@ function buyUpg( subj ){
 
 function doScaleThings(){
     document.querySelector(`#myScale`).innerHTML = `Scale ${niceNumber(getStat(`scale`))}:1`;
-    // TODO move jerks back when increasing scale
     for( let i = 0; i < jerks.length; i++ ){
         let j = jerks[i];
         j.x += j.xDir * 100;
