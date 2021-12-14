@@ -64,7 +64,7 @@ main{
 
 .bottom,.top{
     position: absolute;
-    width: 10rem;
+    width: 15rem;
 }
 .bottom{ bottom: 1rem; }
 .top{ top: 1rem; }

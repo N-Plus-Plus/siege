@@ -21,6 +21,7 @@ var me = {
     , damage: 2.5
     , mobility: 150
     , scale: 1
+    , showScale: 1
     , toScale: 1
 }
 var shooter = {
@@ -41,18 +42,18 @@ var run = {
     , active: true
 }
 var upg = {
-    damage: { ranks: 0, cost: 1000, benefit: 1.1, scale: 1.125, curr: `mass` }
-    , mobility: { ranks: 0, cost: 2050, benefit: 1.1, scale: 1.125, curr: `mass` }
-    , scale: { ranks: 0, cost: 4200, benefit: 1.1, scale: 1.125, curr: `mass` }
-    , spawnrate: { ranks: 0, cost: 20, benefit: 1.1, scale: 1.125, curr: `cores` }
-    , density: { ranks: 0, cost: 45, benefit: 1.5, scale: 1.125, curr: `cores` }
-    , enemymass: { ranks: 0, cost: 95, benefit: 2, scale: 1.125, curr: `cores` }
+    damage: { ranks: 0, cost: 1000, benefit: 1.1, curr: `mass` }
+    , mobility: { ranks: 0, cost: 2050, benefit: 1.1, curr: `mass` }
+    , scale: { ranks: 0, cost: 4200, benefit: 1.1, curr: `mass` }
+    , spawnrate: { ranks: 0, cost: 20, benefit: 1.1, curr: `cores` }
+    , density: { ranks: 0, cost: 45, benefit: 1.5, curr: `cores` }
+    , enemymass: { ranks: 0, cost: 95, benefit: 2, curr: `cores` }
 }
 var unit = canvasDiameter * 0.001;
 
 var jerks = [];
 
-const waveTimer = 4500;
+const waveTimer = 5000;
 var liveness = true;
 
 
@@ -86,7 +87,7 @@ function doWaves(){
             }
         }
         doWaves();
-    }, 500 + ( waveTimer / getStat( `spawnrate` ) ) / Math.log2( me.scale + 1 ) );
+    }, waveTimer / getStat( `spawnrate` ) );
 }
 
 function doLoop(){
@@ -102,7 +103,8 @@ function doLoop(){
         updateAfford();
     }
     if( me.mass !== me.toMass ){ adjMass(); }
-    if( me.scale !== me.toScale ){ adjScale(); }
+    if( me.showScale !== me.toScale ){ adjScale(); }
+    jerks.sort((a, b) => a.r > b.r && 1 || -1 );
 }
 
 function updateMass(){
@@ -151,28 +153,28 @@ function drawMe(){
         ctx.moveTo( canvasRadius, canvasRadius );
         ctx.lineTo( jerks[0].x, jerks[0].y );
         ctx.strokeStyle = "#f00"
-        ctx.lineWidth = Math.max( 2 / me.scale, 0.5 );
+        ctx.lineWidth = Math.max( 2 / me.showScale, 0.5 );
         ctx.stroke();
         ctx.closePath();
     }
 
-    if( me.scale < 8 ){
+    if( me.showScale < 12 ){
         // shooter
-        let c = ( aToR( me.mass ) + shooter.len ) / me.scale * unit;
+        let c = ( aToR( me.mass ) + shooter.len ) / me.showScale * unit;
         let a = Math.sin( shooter.rad ) * c;
         let b = Math.cos( shooter.rad ) * c;
         ctx.beginPath();
         ctx.moveTo( canvasRadius, canvasRadius );
         ctx.lineTo( canvasRadius + b, canvasRadius + a );
         ctx.strokeStyle = "#fff"
-        ctx.lineWidth = 5 / me.scale * unit;
+        ctx.lineWidth = 5 / me.showScale * unit;
         ctx.stroke();
         ctx.closePath();
     }
 
     // me
     ctx.beginPath();
-    ctx.arc( canvasRadius, canvasRadius, aToR( me.mass ) / me.scale * unit, 0, Math.PI * 2 );
+    ctx.arc( canvasRadius, canvasRadius, aToR( me.mass ) / me.showScale * unit, 0, Math.PI * 2 );
     ctx.fillStyle = `#fff`;
     ctx.fill();
     ctx.closePath();
@@ -193,15 +195,15 @@ function moveJerks(){
     let g = getGravity();
     for( let i = 0; i < jerks.length; i++ ){
         let j = jerks[i];
-        if( j.delay > 0 ){ j.delay--; }
-        else if( intersect( j.x, j.y, 0, canvasRadius, canvasRadius, aToR( me.mass ) / me.scale * unit ) ){
+        j.xDir *= ( ( g - 1 ) * j.density ) + 1;
+        j.yDir *= ( ( g - 1 ) * j.density ) + 1;
+        if( intersect( j.x, j.y, 0, canvasRadius, canvasRadius, aToR( me.mass ) / me.showScale * unit ) ){
             addMass( j.mass * j.density, i );
         }
         else{
             j.x += j.xDir;
             j.y += j.yDir;
-            j.xDir *= ( ( g - 1 ) * j.density ) + 1;
-            j.yDir *= ( ( g - 1 ) * j.density ) + 1;
+            j.r = xyToR( j.x, j.y )
         }
     }
 }
@@ -215,7 +217,7 @@ function moveShooter(){
         if( shooter.rad < 0 ){ shooter.rad += Math.PI * 2; }
         if( shooter.rad > Math.PI * 2 ){ shooter.rad -= Math.PI * 2; }
         if( deg !== shooter.rad ){
-            let amt = makeRadian( getStat( `mobility` ) ) / aToC( me.mass ) / me.scale * unit * ( speedMod * 1e3 );
+            let amt = makeRadian( getStat( `mobility` ) ) / aToC( me.mass ) * unit * ( speedMod * 1e3 );
             if( ( shooter.rad < deg && shooter.rad + amt > deg ) || ( shooter.rad > deg && shooter.rad - amt < deg ) ){
                 shooter.rad = deg;
             }
@@ -226,9 +228,9 @@ function moveShooter(){
         }
         else{
             if( shooter.firing ){ fireLaser( 0 ); }
-            else if( intersect( t.x, t.y, aToR( t.mass ) / me.scale * unit, canvasRadius, canvasRadius, canvasRadius / 2 ) ){
+            else if( intersect( t.x, t.y, aToR( t.mass ) / me.showScale * unit, canvasRadius, canvasRadius, canvasRadius / 2 ) ){
                 t.lockedOn = true;
-                shooter.firing = true;                
+                shooter.firing = true;
             }
         }
     }
@@ -249,7 +251,7 @@ function exchangeMass( a, i, outbound ){
     if( outbound ){
         if( jerks[i].type == `anti` ){ jerks[i].mass += a; }
         else{
-            jerks[i].mass -= a;
+            jerks[i].mass -= a / jerks[i].density;
             me.toMass += a;
             run.massConsumed += a;
         }
@@ -260,7 +262,7 @@ function drawJerks(){
     for( let i = 0; i < jerks.length; i++ ){
         let j = jerks[i];
         ctx.beginPath();
-        ctx.arc( j.x, j.y, aToR( j.mass ) / me.scale * unit, 0, Math.PI * 2 );
+        ctx.arc( j.x, j.y, aToR( j.mass / j.density ) / me.showScale * unit, 0, Math.PI * 2 );
         if( jerks[i].type == `anti` ){ ctx.fillStyle = `#0006`; }
         else{ ctx.fillStyle = `#fff6`; }
         ctx.fill();
@@ -280,12 +282,13 @@ function spawnJerk(){
             , density: getStat( `density` )
             , x: canvasRadius + a
             , y: canvasRadius + b
-            , xDir: -a * speedMod * unit / me.scale
-            , yDir: -b * speedMod * unit / me.scale
+            , xDir: -a * speedMod * unit / me.showScale
+            , yDir: -b * speedMod * unit / me.showScale
             , delay: 0
             , visible: false
             , type: getType()
             , lockedOn: false
+            , r: canvasRadius
         }
     )
 }
@@ -324,6 +327,10 @@ function rToC( r ){
 }
 function aToC( a ){
     return 2 * Math.PI * aToR( a );
+}
+
+function xyToR( x, y ){
+    return Math.sqrt( Math.pow( canvasRadius - x, 2 ) + Math.pow( canvasRadius - y, 2 ) );
 }
 
 function intersect( x1, y1, r1, x2, y2, r2 ){
@@ -432,10 +439,10 @@ function adjMass(){
 }
 
 function adjScale(){
-    let amt = Math.max( 0.005, Math.abs( me.toScale - me.scale ) / adjFrames );
-    if( Math.abs( me.scale - me.toScale ) < amt ){ amt = me.scale - me.toScale; }
-    else{ me.scale += amt; }
-    document.querySelector(`#myScale`).innerHTML = `Scale ${niceNumber( me.scale )}:1`;
+    let amt = Math.max( 0.005, Math.abs( me.toScale - me.showScale ) / adjFrames );
+    if( Math.abs( me.showScale - me.toScale ) < amt ){ amt = me.showScale - me.toScale; }
+    else{ me.showScale += amt; }
+    document.querySelector(`#myScale`).innerHTML = `Scale ${niceNumber( me.showScale )}:1`;
 }
 
 function checkAfford( subj ){
