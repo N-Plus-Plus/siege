@@ -8,22 +8,23 @@
     <title>Doot Defender</title>
 </head>
 <body>
-    <section class="left">
-        <div class="important" id="myMass"></div>
-        <div class="button" id="mobility">+10% Mobility<div class="tag"></div><div class="fill"></div></div>
-        <div class="button" id="damage">+10% Damage<div class="tag"></div><div class="fill"></div></div>
-        <div class="button" id="scale">+10% Range<div class="tag"></div><div class="fill"></div></div>
+    <section class="leftSect">
+        <div class="button" id="damage"><div class="dfill">+10% Damage<div class="tag"></div></div><div class="fill"></div></div>
+        <div class="button" id="mobility"><div class="dfill">+10% Mobility<div class="tag"></div></div><div class="fill"></div></div>
+        <div class="button" id="scale"><div class="dfill">+10% Range<div class="tag"></div></div><div class="fill"></div></div>
     </section>
-    <canvas id="canvas"></canvas>
-    <section class="right">
-        <div class="important" id="myScale">Scale: 1:1</div>
-        <div class="important bottom" id="runTime">00:00:00</div></div>
-        <div class="button" id="spawnrate">+10% Spawn Rate<div class="tag"></div><div class="fill"></div></div>
-        <div class="button" id="density">+10% Enemy Density<div class="tag"></div><div class="fill"></div></div>
-        <div class="button" id="enemymass">+25% Enemy Mass<div class="tag"></div><div class="fill"></div></div>
+    <main class="flexy">
+        <div class="important top left" id="myMass"></div>
+        <div class="important bottom left" id="myScale">Scale: 1:1</div>
+        <div class="important top right" id="myCores">Cores: 0</div>
+        <div class="important bottom right" id="runTime">00:00:00</div></div>
+        <canvas id="canvas"></canvas>
+    </main>
+    <section class="rightSect">
+        <div class="button" id="spawnrate"><div class="dfill">+10% Spawn Rate<div class="tag"></div></div><div class="fill"></div></div>
+        <div class="button" id="density"><div class="dfill">+50% Enemy Density<div class="tag"></div></div><div class="fill"></div></div>
+        <div class="button" id="enemymass"><div class="dfill">+100% Enemy Mass<div class="tag"></div></div><div class="fill"></div></div>
     </section>
 </body>
+<script src="code.js"></script>
 </html>
-<footer>
-    <script src="code.js"></script>
-</footer>

@@ -7,17 +7,18 @@ const canvas = document.querySelector(`#canvas`);
 const ctx = canvas.getContext(`2d`);
 var canvasDiameter = Math.min( document.body.clientHeight, document.body.clientWidth ) * 0.9; // Canvas width and height
 var canvasRadius = canvasDiameter / 2;
-const frameRate = 10; // Frame Rate
+var speedMod = 0.0025;
+var costScale = 1.125;
+const frameRate = 30; // Frame Rate
 const adjFrames = 100; // Mass change frames
 const ups = 30; // UI updates per second
 const massFloor = 100;
-const delayFrames = 25; // frames between each jerk appearing
 const maxJerks = 100;
 
 var me = {
-    mass: 1000
-    , toMass: 1000
-    , damage: 5
+    mass: 500
+    , toMass: 500
+    , damage: 2.5
     , mobility: 150
     , scale: 1
     , toScale: 1
@@ -32,22 +33,20 @@ var run = {
     wave: 0
     , jerks: 1
     , spawnrate: 1
-    , velocity: 1
     , density: 1
     , enemymass: 250
     , ticks: 0
     , massConsumed: 0
-    , kills: 0
+    , cores: 0
+    , active: true
 }
 var upg = {
-    mobility: { ranks: 0, cost: 2000, benefit: 1.1, scale: 1.125 }
-    , damage: { ranks: 0, cost: 4000, benefit: 1.1, scale: 1.125 }
-    , scale: { ranks: 0, cost: 8000, benefit: 1.1, scale: 1.125 }
-    , spawnrate: { ranks: 0, cost: 2500, benefit: 1.1, scale: 1.125 }
-    , velocity: { ranks: 0, cost: 5000, benefit: 1.1, scale: 1.125 }
-    , density: { ranks: 0, cost: 7500, benefit: 1.1, scale: 1.125 }
-    , enemymass: { ranks: 0, cost: 10000, benefit: 1.25, scale: 1.25 * 10 / 9 }
-
+    damage: { ranks: 0, cost: 1000, benefit: 1.1, scale: 1.125, curr: `mass` }
+    , mobility: { ranks: 0, cost: 2050, benefit: 1.1, scale: 1.125, curr: `mass` }
+    , scale: { ranks: 0, cost: 4200, benefit: 1.1, scale: 1.125, curr: `mass` }
+    , spawnrate: { ranks: 0, cost: 20, benefit: 1.1, scale: 1.125, curr: `cores` }
+    , density: { ranks: 0, cost: 45, benefit: 1.5, scale: 1.125, curr: `cores` }
+    , enemymass: { ranks: 0, cost: 95, benefit: 2, scale: 1.125, curr: `cores` }
 }
 var unit = canvasDiameter * 0.001;
 
@@ -66,7 +65,10 @@ function onLoad(){
     doWaves();
 }
 
-var loop = setInterval(() => { if( liveness ){ doLoop(); } }, frameRate );
+var loop = setInterval(() => { 
+        if( liveness && run.active ){ doLoop(); } 
+        else{} // add out of run loop here
+    }, frameRate );
 
 function clicked( target, button ){
     if( button == 0 ){
@@ -84,15 +86,15 @@ function doWaves(){
             }
         }
         doWaves();
-    }, 500 + waveTimer / getStat( `spawnrate` ) );
+    }, 500 + ( waveTimer / getStat( `spawnrate` ) ) / Math.log2( me.scale + 1 ) );
 }
 
 function doLoop(){
     cleanup();
     moveJerks();
     moveShooter();
-    drawMe();
     drawJerks();
+    drawMe();
     run.ticks++;
     if( run.ticks % ( ups / frameRate ) == 0 ){
         updateMass();
@@ -100,6 +102,7 @@ function doLoop(){
         updateAfford();
     }
     if( me.mass !== me.toMass ){ adjMass(); }
+    if( me.scale !== me.toScale ){ adjScale(); }
 }
 
 function updateMass(){
@@ -110,19 +113,28 @@ function updateClock(){
     document.querySelector(`#runTime`).innerHTML = timeFromTicks( run.ticks );
 }
 
+function updateCores(){
+    document.querySelector(`#myCores`).innerHTML = `Cores: ${run.cores}`;
+}
+
 function updateAfford(){
-    let n = document.querySelectorAll(`.button`);
+    let n = document.querySelectorAll(`.button`);    
     for( let i = 0; i < n.length; i++ ){
         a = n[i].getAttribute(`id`);
         if( checkAfford( a ) ){ 
             n[i].classList.add( `afford`);
-            n[i].children[0].innerHTML = `${romanize( upg[a].ranks + 1)}`;
-            n[i].children[1].style = `;`;
+            n[i].children[0].children[0].innerHTML = `${romanize( upg[a].ranks + 1)}`;
+            n[i].children[1].style = ``;
         }
         else{
             n[i].classList.remove( `afford`);
-            n[i].children[0].innerHTML = `${romanize( upg[a].ranks + 1)}`;
-            n[i].children[1].style = `width: ${( me.toMass - massFloor ) / getCost( a ) * 100}%`;
+            n[i].children[0].children[0].innerHTML = `${romanize( upg[a].ranks + 1)}`;
+            if( upg[a].curr == `mass` ){
+                n[i].children[1].style = `width: ${( me.toMass - massFloor ) / getCost( a ) * 100}%`;
+            }
+            else{
+                n[i].children[1].style = `width: ${( run.cores ) / getCost( a ) * 100}%`;
+            }
         }
     }
 }
@@ -137,30 +149,30 @@ function drawMe(){
     if( shooter.firing ){
         ctx.beginPath();
         ctx.moveTo( canvasRadius, canvasRadius );
-        ctx.lineTo( shooter.target.x, shooter.target.y );
+        ctx.lineTo( jerks[0].x, jerks[0].y );
         ctx.strokeStyle = "#f00"
-        ctx.lineWidth = Math.max( 2 / getStat( `scale` ), 0.5 );
+        ctx.lineWidth = Math.max( 2 / me.scale, 0.5 );
         ctx.stroke();
         ctx.closePath();
     }
 
-    if( getStat(`scale`) < 8 ){
+    if( me.scale < 8 ){
         // shooter
-        let c = ( aToR( me.mass ) + shooter.len ) / getStat( `scale` ) * unit;
+        let c = ( aToR( me.mass ) + shooter.len ) / me.scale * unit;
         let a = Math.sin( shooter.rad ) * c;
         let b = Math.cos( shooter.rad ) * c;
         ctx.beginPath();
         ctx.moveTo( canvasRadius, canvasRadius );
         ctx.lineTo( canvasRadius + b, canvasRadius + a );
         ctx.strokeStyle = "#fff"
-        ctx.lineWidth = 5 / getStat( `scale` ) * unit;
+        ctx.lineWidth = 5 / me.scale * unit;
         ctx.stroke();
         ctx.closePath();
     }
 
     // me
     ctx.beginPath();
-    ctx.arc( canvasRadius, canvasRadius, aToR( me.mass ) / getStat( `scale` ) * unit, 0, Math.PI * 2 );
+    ctx.arc( canvasRadius, canvasRadius, aToR( me.mass ) / me.scale * unit, 0, Math.PI * 2 );
     ctx.fillStyle = `#fff`;
     ctx.fill();
     ctx.closePath();
@@ -178,52 +190,33 @@ function drawMe(){
 }
 
 function moveJerks(){
+    let g = getGravity();
     for( let i = 0; i < jerks.length; i++ ){
         let j = jerks[i];
         if( j.delay > 0 ){ j.delay--; }
-        else if( intersect( j.x, j.y, 0, canvasRadius, canvasRadius, aToR( me.mass ) / getStat(`scale`) * unit ) ){
-            addMass( Math.pow( j.mass, Math.log2( j.density + 1 ) ), i );
+        else if( intersect( j.x, j.y, 0, canvasRadius, canvasRadius, aToR( me.mass ) / me.scale * unit ) ){
+            addMass( j.mass * j.density, i );
         }
         else{
             j.x += j.xDir;
             j.y += j.yDir;
+            j.xDir *= ( ( g - 1 ) * j.density ) + 1;
+            j.yDir *= ( ( g - 1 ) * j.density ) + 1;
         }
     }
 }
 
 function moveShooter(){
-    // TODO aim out of range but don't fire until in range
-    let vis = [];
-    for( let i = 0; i < jerks.length; i++ ){
-        if( !jerks[i].visible ){
-            if( intersect( jerks[i].x, jerks[i].y, aToR( jerks[i].mass ) / getStat(`scale`) * unit, canvasRadius, canvasRadius, canvasRadius / 2 ) ){
-                jerks[i].visible = true;
-            }
-        }
-        if( jerks[i].visible ){
-            vis.push(
-                { 
-                    index: i, 
-                    dist: Math.sqrt( Math.pow( canvasRadius - jerks[i].x, 2 ) + Math.pow( canvasRadius - jerks[i].y, 2 ) ) - aToR( me.mass )
-                }
-            )
-        }
-        vis.sort( ( a, b ) => a.dist > b.dist && 1 || -1 );
-    }
-    shooter.firing = false;
-    if( vis.length > 0 ){
-        let t = jerks[vis[0].index];
+    if( jerks.length > 0 ){
+        let t = jerks[0];
         let deg = Math.atan2( -t.yDir, -t.xDir );
         if( deg < 0 ){ deg += Math.PI * 2; }
         if( deg > Math.PI * 2 ){ deg -= Math.PI * 2; }
         if( shooter.rad < 0 ){ shooter.rad += Math.PI * 2; }
         if( shooter.rad > Math.PI * 2 ){ shooter.rad -= Math.PI * 2; }
         if( deg !== shooter.rad ){
-            let amt = makeRadian( getStat( `mobility` ) ) / aToC( me.mass ) / getStat( `scale` ) * unit;
-            if( shooter.rad < deg && shooter.rad + amt > deg ){
-                shooter.rad = deg;
-            }
-            else if( shooter.rad > deg && shooter.rad - amt < deg ){
+            let amt = makeRadian( getStat( `mobility` ) ) / aToC( me.mass ) / me.scale * unit * ( speedMod * 1e3 );
+            if( ( shooter.rad < deg && shooter.rad + amt > deg ) || ( shooter.rad > deg && shooter.rad - amt < deg ) ){
                 shooter.rad = deg;
             }
             else{
@@ -231,32 +224,45 @@ function moveShooter(){
                 shooter.rad += amt;                
             } 
         }
-        else{ fireLaser( vis[0].index ); }
+        else{
+            if( shooter.firing ){ fireLaser( 0 ); }
+            else if( intersect( t.x, t.y, aToR( t.mass ) / me.scale * unit, canvasRadius, canvasRadius, canvasRadius / 2 ) ){
+                t.lockedOn = true;
+                shooter.firing = true;                
+            }
+        }
     }
 }
 
-function fireLaser( index ){
-    let tar = jerks[index];
-    let a = Math.min( getStat( `damage` ), tar.mass * tar.density );
-    tar.mass -= a;
-    me.toMass += a;
-    run.massConsumed += a;
-    shooter.firing = true;
-    shooter.target.x = tar.x;
-    shooter.target.y = tar.y;
-    if( jerks[index].mass <= 0 ){
-        jerks.splice( index, 1 );
-        run.kills++;
+function fireLaser( i ){
+    let a = Math.min( getStat( `damage` ), jerks[i].mass * jerks[i].density );
+    exchangeMass( a, i, true );
+    if( jerks[i].mass <= 0 ){
+        jerks.splice( i, 1 );
+        run.cores++;
+        updateCores();
+        shooter.firing = false;
     }
-    updateMass();
+}
+
+function exchangeMass( a, i, outbound ){
+    if( outbound ){
+        if( jerks[i].type == `anti` ){ jerks[i].mass += a; }
+        else{
+            jerks[i].mass -= a;
+            me.toMass += a;
+            run.massConsumed += a;
+        }
+    }
 }
 
 function drawJerks(){
     for( let i = 0; i < jerks.length; i++ ){
         let j = jerks[i];
         ctx.beginPath();
-        ctx.arc( j.x, j.y, aToR( j.mass ) / getStat( `scale` ) * unit, 0, Math.PI * 2 );
-        ctx.fillStyle = `#fff6`;
+        ctx.arc( j.x, j.y, aToR( j.mass ) / me.scale * unit, 0, Math.PI * 2 );
+        if( jerks[i].type == `anti` ){ ctx.fillStyle = `#0006`; }
+        else{ ctx.fillStyle = `#fff6`; }
         ctx.fill();
         ctx.closePath();
     }
@@ -271,25 +277,44 @@ function spawnJerk(){
     jerks.push(
         {
             mass: m
-            , density: 1 * getStat( `density` )
+            , density: getStat( `density` )
             , x: canvasRadius + a
             , y: canvasRadius + b
-            , xDir: -a * 0.002 * unit / getStat( `scale` )
-            , yDir: -b * 0.002 * unit / getStat( `scale` )
+            , xDir: -a * speedMod * unit / me.scale
+            , yDir: -b * speedMod * unit / me.scale
             , delay: 0
             , visible: false
+            , type: getType()
+            , lockedOn: false
         }
     )
 }
 
+function getType(){
+    let o = `regular`
+    if( Math.random() < 0.02 ){ o = `anti` }
+    return o;
+}
+
 function addMass( n, j ){
-    me.toMass -= n;
+    if( jerks[j].type == `anti` ){ me.toMass += n - getStat( `enemymass` ); }
+    else{ me.toMass -= n; }
+    if( me.toMass < massFloor ){ 
+        me.toMass = massFloor;
+        gameOver();
+    }
     jerks[j].mass = 0;
     for( let i = jerks.length - 1; i >= 0; i-- ){
         if( jerks[i].mass == 0 ){ jerks.splice( i, 1 ); }
+        shooter.firing = false;
     }
 }
 
+function gameOver(){
+    liveness = false;
+    run.active = false;
+    console.log( `game over` );
+}
 
 function aToR( a ){
     return Math.sqrt( a / Math.PI );
@@ -399,42 +424,56 @@ function calcMPS(){
 }
 
 function adjMass(){
-    let amt = Math.max( 5, Math.abs( me.mass - me.toMass ) / adjFrames );
+    let amt = Math.max( 10, Math.abs( me.mass - me.toMass ) / adjFrames );
     if( Math.abs( me.mass - me.toMass ) < amt ){ amt = me.mass - me.toMass; }
     if( me.toMass < me.mass ){ amt *= -1; }
     if( Math.abs( me.toMass - me.mass ) / me.toMass < 0.02 ){ me.mass = me.toMass; }    
     else{ me.mass += amt; }
 }
 
+function adjScale(){
+    let amt = Math.max( 0.005, Math.abs( me.toScale - me.scale ) / adjFrames );
+    if( Math.abs( me.scale - me.toScale ) < amt ){ amt = me.scale - me.toScale; }
+    else{ me.scale += amt; }
+    document.querySelector(`#myScale`).innerHTML = `Scale ${niceNumber( me.scale )}:1`;
+}
+
 function checkAfford( subj ){
     let u = upg[subj];
-    let spend = me.toMass - massFloor;
-    let cost = u.cost * Math.pow( u.scale, u.ranks );
+    let spend = 0;
+    if( u.curr == `mass` ){ spend = me.toMass - massFloor; }
+    else{ spend = run.cores; }
+    let cost = u.cost * Math.pow( costScale, u.ranks );
     return cost <= spend;
+}
+
+function prestigeAfford(){
+    let o = false;
+    if( Math.log2( run.cores / 1000 ) >= 0 ){ o = true; }
+    return o;
+}
+
+function getPrestigeAmount(){
+    return Math.log2( run.cores / 1000 );
 }
 
 function buyUpg( subj ){
     if( checkAfford( subj ) ){
         let u = upg[subj];
-        me.toMass -= u.cost * Math.pow( u.scale, u.ranks );
+        let cost = u.cost * Math.pow( costScale, u.ranks );
+        if( u.curr == `mass` ){ me.toMass -= cost; }
+        else{ run.cores -= Math.ceil( cost ); updateCores(); }
         u.ranks++;
     }
     if( subj == `scale` ){
-        doScaleThings();
+        me.toScale = getStat( `scale` );
     }    
 }
 
-function doScaleThings(){
-    document.querySelector(`#myScale`).innerHTML = `Scale ${niceNumber(getStat(`scale`))}:1`;
-    for( let i = 0; i < jerks.length; i++ ){
-        let j = jerks[i];
-        j.x += j.xDir * 100;
-        j.y += j.yDir * 100;
-    }
-}
-
 function getCost( subj ){
-    return upg[subj].cost * Math.pow( upg[subj].scale, upg[subj].ranks );
+    let o = upg[subj].cost * Math.pow( costScale, upg[subj].ranks );
+    if( upg[subj].curr == `cores` ){ o = Math.ceil( upg[subj].cost * Math.pow( costScale, upg[subj].ranks ) ); }
+    return o;
 }
 
 function getStat( stat ){
@@ -445,6 +484,12 @@ function getStat( stat ){
     else{
         o = run[stat] * Math.pow( upg[stat].benefit, upg[stat].ranks );
     }
+    return o;
+}
+
+function getGravity(){
+    let o = 1;
+    o += Math.log10(me.mass) / 1e4;
     return o;
 }
 
@@ -471,13 +516,12 @@ All upgrades add colour to the interface and canvas
 
 General
 Scale change using a "toScale" like "toMass"
-Add gravity so your mass increases the speed of jerks towards you per second per second
 Another laser (potentially multiple) that never target the same jerk except bosses
-Upgrade jerks with body count instead of mass ?
 Prestige mechanic, currency and upgrades
 Handle game loss (and hung state ?)
 Autobuyers which run every n seconds but blindly buy everything
 - secondary upgrade to deselect autobuy per upgrade
+
 
 Laser
 COLD: Beam slows enemy while being fired at
